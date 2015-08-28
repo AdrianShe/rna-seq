@@ -1,6 +1,9 @@
 ## Preprocess data and compute correlations
 library(plyr)
-#load("/Users/Adrian/Desktop/rna_seq_results/isoforms.RData")
+
+## Load matricies into workspace
+message("Loading all data")
+load("all_matricies.RData")
 
 ## x: matrix of expression values in FPKM from RNA-seq quantification tool
 processData <- function(x) {
@@ -11,26 +14,34 @@ processData <- function(x) {
 }
 
 message("Processing CCLE Data")
-ccle.star.cufflinks <- processData(ccle.star.cufflinks)
-ccle.tophat.cufflinks <- processData(ccle.tophat.cufflinks)
-ccle.star.stringtie <- processData(ccle.star.stringtie)
-ccle.tophat.stringtie <- processData(ccle.tophat.stringtie)
+ccle_tophat_cufflinks <- processData(ccle_tophat_cufflinks)
+ccle_tophat_stringtie <- processData(ccle_tophat_stringtie)
+ccle_star_cufflinks <- processData(ccle_star_cufflinks)
+ccle_star_stringtie <- processData(ccle_star_stringtie)
+ccle_kallisto <- log2(ccle_kallisto + 1)
 
 message("Processing GNE Data")
-gne.star.cufflinks <- processData(gne.star.cufflinks)
-gne.tophat.cufflinks <- processData(gne.tophat.cufflinks)
-gne.star.stringtie <- processData(gne.star.stringtie)
-gne.tophat.stringtie <- processData(gne.tophat.stringtie)
+gne_tophat_cufflinks <- processData(gne_tophat_cufflinks)
+gne_tophat_stringtie <- processData(gne_tophat_stringtie)
+gne_star_cufflinks <- processData(gne_star_cufflinks)
+gne_star_stringtie <- processData(gne_star_stringtie)
+gne_kallisto <- log2(gne_kallisto + 1)
 
-## Take log2 + 1 transform of TPM for kallisto
-ccle.kallisto <- log2(ccle.kallisto + 1)
-gne.kallisto <- log2(gne.kallisto + 1)
+args <- commandArgs(trailingOnly = TRUE)
+if (args[1]) {
+    ccle_tophat_cufflinks <- t(ccle_tophat_cufflinks)
+    ccle_kallisto <- t(ccle_kallisto)
+    ccle_star_cufflinks <- t(ccle_star_cufflinks)
+    gne_kallisto <- t(gne_kallisto)
+    gne_star_cufflinks <- t(gne_star_cufflinks)
+    gne_tophat_cufflinks <- t(gne_tophat_cufflinks)
+}
 
 ## df1: frame 1 of gene expression values in TPM
 ## df2: frame 2 of gene expression values in TPM
 ## method: "pearson" or "spearman" correlation
 ## returns named vector of correlation values
-getCorrelationMatrix <- function(df1, df2, method) {
+getCorrelation <- function(df1, df2, method) {
   
   ## Get common rows and genes
   commonRows <- intersect(rownames(df1), rownames(df2))
@@ -45,57 +56,74 @@ getCorrelationMatrix <- function(df1, df2, method) {
             warning = function(w) { NA }))
   correlation <- matrix(correlation, nrow = 1)
   colnames(correlation) <- commonRows
+  print(paste(length(commonRows), "found"))
   return(correlation)
 }
 
-names <- c("tophat/star", "tophat/kallisto", "star/kallisto", "tophat/tophat", "star/star", "tophat/star/stringtie", "tophat/kallisto/stringtie", "star/kallisto/stringtie")
-ccleCorMatrix <- rbind.fill.matrix(list(
-  getCorrelationMatrix(ccle.tophat.cufflinks, ccle.star.cufflinks, "spearman"),
-  getCorrelationMatrix(ccle.kallisto, ccle.tophat.cufflinks, "spearman"),
-  getCorrelationMatrix(ccle.star.cufflinks, ccle.kallisto, "spearman"),
-  getCorrelationMatrix(ccle.tophat.cufflinks, ccle.tophat.stringtie, "spearman"),
-  getCorrelationMatrix(ccle.star.cufflinks, ccle.star.stringtie, "spearman"),
-  getCorrelationMatrix(ccle.tophat.stringtie, ccle.star.stringtie, "spearman"),
-  getCorrelationMatrix(ccle.tophat.stringtie, ccle.kallisto, "spearman"),
-  getCorrelationMatrix(ccle.star.stringtie, ccle.kallisto, "spearman")))
-rownames(ccleCorMatrix) <- names
-
-gneCorMatrix <- rbind.fill.matrix(list(
-  getCorrelationMatrix(gne.tophat.cufflinks, gne.star.cufflinks, "spearman"),
-  getCorrelationMatrix(gne.kallisto, gne.tophat.cufflinks, "spearman"),
-  getCorrelationMatrix(gne.star.cufflinks, gne.kallisto, "spearman"),
-  getCorrelationMatrix(gne.tophat.cufflinks, gne.tophat.stringtie, "spearman"),
-  getCorrelationMatrix(gne.star.cufflinks, gne.star.stringtie, "spearman"),
-  getCorrelationMatrix(gne.tophat.stringtie, gne.star.stringtie, "spearman"),
-  getCorrelationMatrix(gne.tophat.stringtie, gne.kallisto, "spearman"),
-  getCorrelationMatrix(gne.star.stringtie, gne.kallisto, "spearman")))
-rownames(gneCorMatrix) <- names
-boxplot(t(gneCorMatrix))
 
 
-#studyCorMatrix <- rbind.fill.matrix(list(
-#  getCorrelationMatrix(ccle.tophat.cufflinks, gne.tophat.cufflinks, "spearman"),
-#  getCorrelationMatrix(ccle.star.cufflinks, gne.star.cufflinks, "spearman"),
-#  getCorrelationMatrix(ccle.kallisto, gne.kallisto, "spearman"),
-#  getCorrelationMatrix(ccle.tophat.stringtie, gne.tophat.stringtie, "spearman"),
-# getCorrelationMatrix(ccle.star.stringtie, gne.star.stringtie, "spearman")))
-#boxplot(t(studyCorMatrix))
-## Kallisto in general gives a worse reproducibility in comparison to STAR/Tophat
-## RNAseq quantifies the relative expression of transcripts. 
+message("Calculating CCLE correlations")
 
-## df1: vec1, df2: vec2
-foldChanges <- function(df1, df2) {
+ccleCorMatrixSpearman <- rbind.fill.matrix(list(
+  getCorrelation(ccle_tophat_cufflinks, ccle_star_cufflinks, "spearman"),
+  getCorrelation(ccle_kallisto, ccle_tophat_cufflinks, "spearman"),
+  getCorrelation(ccle_star_cufflinks, ccle_kallisto, "spearman"),
+  getCorrelation(ccle_tophat_cufflinks, ccle_tophat_stringtie, "spearman"),
+  getCorrelation(ccle_star_cufflinks, ccle_star_stringtie, "spearman"),
+  getCorrelation(ccle_tophat_stringtie, ccle_star_stringtie, "spearman"),
+  getCorrelation(ccle_kallisto, ccle_tophat_stringtie, "spearman"),
+  getCorrelation(ccle_kallisto, ccle_star_stringtie, "spearman")))
+
+ccleCorMatrixPearson <- rbind.fill.matrix(list(
+  getCorrelation(ccle_tophat_cufflinks, ccle_star_cufflinks, "pearson"),
+  getCorrelation(ccle_kallisto, ccle_tophat_cufflinks, "pearson"),
+  getCorrelation(ccle_star_cufflinks, ccle_kallisto, "pearson"),
+  getCorrelation(ccle_tophat_cufflinks, ccle_tophat_stringtie, "pearson"),
+  getCorrelation(ccle_star_cufflinks, ccle_star_stringtie, "pearson"),
+  getCorrelation(ccle_tophat_stringtie, ccle_star_stringtie, "pearson"),
+  getCorrelation(ccle_kallisto, ccle_tophat_stringtie, "pearson"),
+  getCorrelation(ccle_kallisto, ccle_star_stringtie, "pearson")))
+
+
+gneCorMatrixSpearman <- rbind.fill.matrix(list(
+  getCorrelation(gne_tophat_cufflinks, gne_star_cufflinks, "spearman"),
+  getCorrelation(gne_kallisto, gne_tophat_cufflinks, "spearman"),
+  getCorrelation(gne_star_cufflinks, gne_kallisto, "spearman"),
+  getCorrelation(gne_tophat_cufflinks, gne_tophat_stringtie, "spearman"),
+  getCorrelation(gne_star_cufflinks, gne_star_stringtie, "spearman"),
+  getCorrelation(gne_tophat_stringtie, gne_star_stringtie, "spearman"),
+  getCorrelation(gne_kallisto, gne_tophat_stringtie, "spearman"),
+  getCorrelation(gne_kallisto, gne_star_stringtie, "spearman")))
+
+gneCorMatrixPearson <- rbind.fill.matrix(list(
+  getCorrelation(gne_tophat_cufflinks, gne_star_cufflinks, "pearson"),
+  getCorrelation(gne_kallisto, gne_tophat_cufflinks, "pearson"),
+  getCorrelation(gne_star_cufflinks, gne_kallisto, "pearson"),
+  getCorrelation(gne_tophat_cufflinks, gne_tophat_stringtie, "pearson"),
+  getCorrelation(gne_star_cufflinks, gne_star_stringtie, "pearson"),
+  getCorrelation(gne_tophat_stringtie, gne_star_stringtie, "pearson"),
+  getCorrelation(gne_kallisto, gne_tophat_stringtie, "pearson"),
+  getCorrelation(gne_kallisto, gne_star_stringtie, "pearson")))
+
+message("Calculating study correlations")
+studyCorMatrixSpearman <- rbind.fill.matrix(list(
+  getCorrelation(ccle_tophat_cufflinks, gne_tophat_cufflinks, "spearman"),
+  getCorrelation(ccle_star_cufflinks, gne_star_cufflinks, "spearman"),
+  getCorrelation(ccle_kallisto, gne_kallisto, "spearman"),
+  getCorrelation(ccle_tophat_stringtie, gne_tophat_stringtie, "spearman"),
+  getCorrelation(ccle_star_stringtie, gne_star_stringtie, "spearman")))
+
+studyCorMatrixPearson <- rbind.fill.matrix(list(
+	getCorrelation(ccle_tophat_cufflinks, gne_tophat_cufflinks, "pearson"),
+ 	getCorrelation(ccle_star_cufflinks, gne_star_cufflinks, "pearson"),
+	getCorrelation(ccle_kallisto, gne_kallisto, "pearson"),
+	getCorrelation(ccle_tophat_stringtie, gne_tophat_stringtie, "pearson"),
+	getCorrelation(ccle_star_stringtie, gne_star_stringtie, "pearson")))
+
+## TODO: Different cell lines in CCLE v_ GNE
+## Gene reproducbility among cell lines and methods with can quantify
+## gene-level expression
+
+save(studyCorMatrixSpearman, studyCorMatrixPearson, gneCorMatrixSpearman, gneCorMatrixPearson,
+ccleCorMatrixSpearman, ccleCorMatrixPearson, file = "corMatricies_aug28.RData")
   
-  ## Get common rows and genes which have a measured values
-  df1 <- df1[!is.na(df1)]
-  df2 <- df2[!is.na(df2)]
-  commonGenes <- intersect(names(df1), names(df2))
-  print(str(list(df1, df2, commonGenes)))
-  
-  ## Get common genes
-  df1 <- df1[commonGenes]
-  df2 <- df2[commonGenes]
-  return (df1 / df2) 
-}
-  
-
